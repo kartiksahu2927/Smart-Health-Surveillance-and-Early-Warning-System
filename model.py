@@ -1,17 +1,3 @@
-"""
-model.py
-==================================================
-The AI Prediction module. Uses a Random Forest classifier (scikit-learn)
-to turn four inputs -- diarrhea cases, fever cases, water turbidity, and
-rainfall -- into a Low / Medium / High outbreak risk prediction.
-
-This trains itself automatically the first time it's imported (on a
-realistic synthetic training set) and then caches the trained model in
-memory, so there is no separate "training step" you have to remember to
-run before starting the app -- one less place for setup errors to creep
-in.
-"""
-
 import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
@@ -58,8 +44,6 @@ def _ensure_trained():
 
 
 def predict_risk(diarrhea_cases, fever_cases, water_turbidity, rainfall):
-    """Returns {'risk_level': 'Low'|'Medium'|'High', 'confidence': float,
-    'probabilities': {...}}"""
     _ensure_trained()
 
     features = np.array([[diarrhea_cases, fever_cases, water_turbidity, rainfall]])

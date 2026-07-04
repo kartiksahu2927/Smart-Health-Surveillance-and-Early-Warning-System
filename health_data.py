@@ -1,49 +1,12 @@
-"""
-health_data.py
-==================================================
-Master dataset for the Smart Health Surveillance System.
-
-WHY THIS FILE EXISTS:
-- Holds every village/location the system tracks, covering ALL 28 Indian
-  states and 8 union territories (so the Register page dropdown is never
-  short on options again).
-- Every location name is stored in plain English on purpose, so the map
-  never shows labels in another script. (See get_live_weather/MAP NOTE
-  below for why the map page also switches tile providers.)
-- Provides a "live" data layer: every time these functions are called,
-  case numbers shift slightly and -- for our priority/hotspot cities --
-  real current rainfall is pulled from the free Open-Meteo API (no key
-  required). This is what powers "real-time" updates on the dashboard,
-  map, and analytics pages.
-
-HONESTY NOTE (documented for whoever reads this code, including future-you
-in a viva): there is no public, free, real-time API that reports live
-village-level water-borne disease case counts in India. Health ministries
-do not expose that granularity openly. So the case numbers below are
-realistic baseline figures, refreshed with a time-seeded variation each
-time the app is accessed -- giving a genuinely "live updating" dashboard
-without pretending to pull from a disease-surveillance API that doesn't
-publicly exist. The RAINFALL data, however, is genuinely real-time and
-pulled live from Open-Meteo when the server has internet access.
-"""
-
 import random
 import urllib.request
 import json
 import time
 from datetime import datetime
 
-# --------------------------------------------------------------------------
-# MASTER LOCATION LIST
-# Every Indian state + union territory gets at least one entry so the
-# Register page can offer a complete list. A few extra well-known cities
-# are included as bonus "hotspots" for richer map/analytics demos.
-# tier: 1=Critical baseline, 2=High, 3=Medium, 4=Low
-# (tiers are starting points only -- the live layer adjusts them)
-# --------------------------------------------------------------------------
 
 LOCATIONS = [
-    # ---- North-Eastern Region ----
+    
     {"name": "Guwahati", "state": "Assam", "region": "North-Eastern",
      "lat": 26.1445, "lon": 91.7362, "population": 1095000,
      "water_source": "Brahmaputra River", "tier": 2},
@@ -69,7 +32,7 @@ LOCATIONS = [
      "lat": 23.8315, "lon": 91.2868, "population": 400000,
      "water_source": "Local Wells & Ponds", "tier": 3},
 
-    # ---- Northern Region ----
+    
     {"name": "Delhi", "state": "Delhi", "region": "Northern",
      "lat": 28.7041, "lon": 77.1025, "population": 16753235,
      "water_source": "Yamuna River & Municipal Supply", "tier": 2},
@@ -104,7 +67,7 @@ LOCATIONS = [
      "lat": 34.1526, "lon": 77.5771, "population": 31000,
      "water_source": "Glacial Streams", "tier": 4},
 
-    # ---- Eastern Region ----
+    
     {"name": "Kolkata", "state": "West Bengal", "region": "Eastern",
      "lat": 22.5726, "lon": 88.3639, "population": 14681000,
      "water_source": "Hooghly River", "tier": 1},
@@ -121,7 +84,7 @@ LOCATIONS = [
      "lat": 20.2961, "lon": 85.8245, "population": 837000,
      "water_source": "Kuakhai River & Wells", "tier": 3},
 
-    # ---- Central Region ----
+    
     {"name": "Bhopal", "state": "Madhya Pradesh", "region": "Central",
      "lat": 23.2599, "lon": 77.4126, "population": 1798000,
      "water_source": "Upper Lake & Wells", "tier": 2},
@@ -129,7 +92,7 @@ LOCATIONS = [
      "lat": 21.2514, "lon": 81.6296, "population": 1123000,
      "water_source": "Kharun River & Wells", "tier": 3},
 
-    # ---- Western Region ----
+   
     {"name": "Mumbai", "state": "Maharashtra", "region": "Western",
      "lat": 19.0760, "lon": 72.8777, "population": 12442373,
      "water_source": "Tansa & Vaitarna Reservoirs", "tier": 3},
@@ -143,7 +106,7 @@ LOCATIONS = [
      "lat": 20.3974, "lon": 72.8328, "population": 191000,
      "water_source": "Municipal Supply & Wells", "tier": 4},
 
-    # ---- Southern Region ----
+    
     {"name": "Chennai", "state": "Tamil Nadu", "region": "Southern",
      "lat": 13.0827, "lon": 80.2707, "population": 7088000,
      "water_source": "Cooum & Adyar Rivers", "tier": 3},
@@ -170,17 +133,11 @@ LOCATIONS = [
      "water_source": "Rainwater & Desalination", "tier": 4},
 ]
 
-# Assign a stable integer id to every location (1-indexed) so the rest of
-# the app can reference locations consistently.
 for _i, _loc in enumerate(LOCATIONS, start=1):
     _loc["id"] = _i
 
-# Diseases this system tracks, in a fixed order used everywhere
 DISEASES = ["diarrhea", "typhoid", "cholera", "hepatitis_a", "malaria"]
 
-# Baseline case counts per tier (tier 1 = worst). These are realistic
-# starting points modelled loosely on publicly reported monsoon-season
-# outbreak patterns; the live layer below adds time-based variation.
 _TIER_BASELINES = {
     1: {"diarrhea": 420, "typhoid": 140, "cholera": 20, "hepatitis_a": 80, "malaria": 90},
     2: {"diarrhea": 230, "typhoid": 70, "cholera": 6, "hepatitis_a": 45, "malaria": 120},
@@ -199,26 +156,13 @@ _TIER_MORTALITY = {1: 3.6, 2: 2.0, 3: 1.0, 4: 0.5}
 
 _RISK_LABELS = {1: "Critical", 2: "High", 3: "Medium", 4: "Low"}
 
-# Cities that get a genuine live-internet weather lookup (kept small on
-# purpose -- fetching 38 locations on every page load would make the app
-# feel slow or break entirely if the network hiccups). Everything else
-# still updates dynamically using the time-seeded simulation, just without
-# the live network call.
 PRIORITY_WEATHER_CITIES = {"Shillong", "Varanasi", "Kolkata", "Guwahati", "Delhi"}
 
-# In-memory cache so we don't hit the weather API more than once every
-# 15 minutes per city, even if many people are using the dashboard.
 _weather_cache = {}
 _WEATHER_CACHE_SECONDS = 15 * 60
 
 
 def get_live_weather(lat, lon, cache_key):
-    """
-    Fetch REAL current weather (temperature + rainfall) from Open-Meteo,
-    a free API that needs no key. Falls back gracefully if there is no
-    internet connection, the request times out, or the API is unreachable
-    -- the app must never crash because of this.
-    """
     now = time.time()
     cached = _weather_cache.get(cache_key)
     if cached and (now - cached["fetched_at"]) < _WEATHER_CACHE_SECONDS:
@@ -245,22 +189,17 @@ def get_live_weather(lat, lon, cache_key):
         _weather_cache[cache_key] = {"fetched_at": now, "data": data}
         return data
     except Exception:
-        # No internet / API down / timeout -- fail quietly, app keeps working
         if cached:
             return cached["data"]
         return fallback
 
 
 def _time_seed(location_id):
-    """Changes once per hour, so numbers visibly shift between visits
-    without jumping around wildly inside a single short session."""
     hour_bucket = datetime.now().strftime("%Y-%m-%d-%H")
     return f"{location_id}-{hour_bucket}"
 
 
 def _live_cases_for(location):
-    """Apply a small, realistic, time-seeded fluctuation (+/- ~18%) to the
-    baseline case numbers for one location."""
     rng = random.Random(_time_seed(location["id"]))
     baseline = _TIER_BASELINES[location["tier"]]
     cases = {}
@@ -271,9 +210,6 @@ def _live_cases_for(location):
 
 
 def _live_water_quality_for(location, rainfall_mm):
-    """Water quality drifts slightly with simulated time AND gets nudged
-    by real rainfall when we have it (heavier rain -> higher turbidity,
-    lower chlorine effectiveness -- a real, well-documented relationship)."""
     rng = random.Random(_time_seed(location["id"]) + "-water")
     base = _TIER_WATER_QUALITY[location["tier"]]
     rainfall_factor = min(1.5, 1 + (rainfall_mm or 0) / 40)
@@ -287,9 +223,6 @@ def _live_water_quality_for(location, rainfall_mm):
 
 
 def _recompute_risk(total_cases, water_quality):
-    """Combine live case load + live water quality into a single risk
-    label, so a real rainfall spike can genuinely push a village's risk
-    level up -- this is the link between 'live weather' and 'live risk'."""
     score = (total_cases / 80) + (water_quality["turbidity"] / 2) + (water_quality["bacteria_count"] / 200)
     if score >= 9:
         return "Critical"
@@ -301,8 +234,6 @@ def _recompute_risk(total_cases, water_quality):
 
 
 def get_live_snapshot(location):
-    """The core 'live data' function: returns a fresh snapshot for one
-    location, recomputed every time it's called."""
     weather = None
     if location["name"] in PRIORITY_WEATHER_CITIES:
         weather = get_live_weather(location["lat"], location["lon"], location["name"])
@@ -336,9 +267,6 @@ def get_live_snapshot(location):
 
 
 def get_all_locations_live():
-    """Returns every tracked location with a fresh live snapshot. This is
-    what dashboard/map/analytics call -- so every page load reflects
-    current conditions."""
     return [get_live_snapshot(loc) for loc in LOCATIONS]
 
 
@@ -350,8 +278,6 @@ def get_location_by_id(location_id):
 
 
 def get_locations_grouped_by_region():
-    """Used by the Register page to build the Village/Area dropdown,
-    grouped by region so a long list of 38 places is easy to scan."""
     grouped = {}
     for loc in LOCATIONS:
         grouped.setdefault(loc["region"], []).append(loc)
@@ -361,7 +287,6 @@ def get_locations_grouped_by_region():
 
 
 def get_hotspot_points():
-    """Lat/lng/intensity triples for the heatmap layer on the map page."""
     points = []
     for snapshot in get_all_locations_live():
         intensity = min(1.0, snapshot["total_cases"] / 600)

@@ -1,16 +1,3 @@
-"""
-app.py
-==================================================
-Main Flask application for the Smart Health Surveillance System.
-
-Run with:  python app.py
-Then open: http://localhost:5000
-
-The database and ML model both initialise themselves automatically the
-first time this file runs -- there is no separate setup script you need
-to remember to run first.
-"""
-
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
@@ -23,7 +10,6 @@ import health_data
 app = Flask(__name__)
 app.secret_key = "smart-health-surveillance-secret-key-2024"
 
-# ---- One-time startup: make sure the DB exists, make sure the model is trained ----
 database.init_database(force=False)
 model._ensure_trained()
 
@@ -33,15 +19,9 @@ def get_db():
 
 
 def is_logged_in():
-    """Simple boolean check -- deliberately returns True/False only (never
-    a Flask Response object) so 'if not is_logged_in():' always behaves
-    correctly at the top of a route."""
     return "user_id" in session
 
 
-# ======================================================================
-# AUTH: Login / Register / Forgot Password / Logout
-# ======================================================================
 
 @app.route("/")
 def index():
@@ -127,14 +107,10 @@ def forgot_password():
         conn.close()
 
         if not user:
-            # Don't reveal whether the email exists -- standard practice
             return jsonify({"success": True,
                              "message": "If that email is registered, password reset instructions would be sent to it."})
 
-        # NOTE: this demo has no email server configured. In a real
-        # deployment this is where you'd email a reset link. For this
-        # project we surface a one-time demo token directly so the flow
-        # is fully testable without SMTP setup.
+    
         return jsonify({
             "success": True,
             "message": "Demo mode: no email server is configured, so here is your reset confirmation directly.",
@@ -151,9 +127,6 @@ def logout():
     return redirect(url_for("login"))
 
 
-# ======================================================================
-# DASHBOARD
-# ======================================================================
 
 @app.route("/dashboard")
 def dashboard():
@@ -177,9 +150,6 @@ def dashboard():
                             high_risk_villages=high_risk_villages)
 
 
-# ======================================================================
-# VILLAGE MANAGEMENT
-# ======================================================================
 
 @app.route("/villages")
 def villages():
@@ -257,9 +227,6 @@ def api_villages_delete(village_id):
         return jsonify({"success": False, "message": str(e)}), 400
 
 
-# ======================================================================
-# HEALTH REPORTING
-# ======================================================================
 
 @app.route("/health-report", methods=["GET"])
 def health_report_page():
@@ -298,7 +265,6 @@ def api_health_report_submit():
         """, (village_id, session["user_id"], diarrhea, fever, vomiting, typhoid, cholera, notes))
         conn.commit()
 
-        # Run AI prediction using this report + a representative turbidity/rainfall
         village = conn.execute("SELECT * FROM Villages WHERE id = ?", (village_id,)).fetchone()
         snapshot = health_data.get_location_by_id(village_id) if village else None
         turbidity = snapshot["water_quality"]["turbidity"] if snapshot else 3.0
@@ -311,7 +277,6 @@ def api_health_report_submit():
             VALUES (?, ?, ?)
         """, (village_id, result["risk_level"], result["confidence"]))
 
-        # Auto-generate an alert for high risk
         if result["risk_level"] == "High":
             conn.execute("""
                 INSERT INTO Alerts (village_id, alert_type, message, status)
@@ -328,9 +293,6 @@ def api_health_report_submit():
         return jsonify({"success": False, "message": str(e)}), 400
 
 
-# ======================================================================
-# WATER QUALITY MONITORING
-# ======================================================================
 
 @app.route("/water-quality", methods=["GET"])
 def water_quality_page():
@@ -368,9 +330,6 @@ def api_water_quality_submit():
         return jsonify({"success": False, "message": str(e)}), 400
 
 
-# ======================================================================
-# AI PREDICTION (standalone tool page)
-# ======================================================================
 
 @app.route("/prediction")
 def prediction_page():
@@ -400,9 +359,6 @@ def api_predict():
         return jsonify({"success": False, "message": str(e)}), 400
 
 
-# ======================================================================
-# ALERTS
-# ======================================================================
 
 @app.route("/alerts")
 def alerts_page():
@@ -423,9 +379,7 @@ def api_alerts_list():
     """).fetchall()
     conn.close()
 
-    # Also surface live high-risk locations as "system-generated" alerts
-    # even if no one has manually filed a report yet -- keeps this page
-    # meaningful from the very first run.
+    
     live_alerts = []
     for snapshot in health_data.get_all_locations_live():
         if snapshot["risk_level"] in ("Critical", "High"):
@@ -455,9 +409,6 @@ def api_alert_resolve(alert_id):
     return jsonify({"success": True})
 
 
-# ======================================================================
-# MAP
-# ======================================================================
 
 @app.route("/map")
 def map_page():
@@ -475,9 +426,6 @@ def api_map_data():
     return jsonify({"success": True, "locations": snapshots, "hotspots": hotspots})
 
 
-# ======================================================================
-# REPORTS
-# ======================================================================
 
 @app.route("/reports")
 def reports_page():
@@ -529,9 +477,6 @@ def api_reports():
     })
 
 
-# ======================================================================
-# ANALYTICS  (previously empty -- now fully populated)
-# ======================================================================
 
 @app.route("/analytics")
 def analytics_page():
@@ -579,9 +524,6 @@ def api_analytics():
     })
 
 
-# ======================================================================
-# AWARENESS
-# ======================================================================
 
 @app.route("/awareness")
 def awareness_page():
@@ -590,9 +532,6 @@ def awareness_page():
     return render_template("awareness.html", name=session["name"], role=session["role"])
 
 
-# ======================================================================
-# ADMIN PANEL
-# ======================================================================
 
 @app.route("/admin")
 def admin_page():
@@ -641,9 +580,6 @@ def api_admin_delete_user(user_id):
     return jsonify({"success": True})
 
 
-# ======================================================================
-# ERROR HANDLERS
-# ======================================================================
 
 @app.errorhandler(404)
 def not_found(error):

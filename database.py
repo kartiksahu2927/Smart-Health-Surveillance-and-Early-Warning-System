@@ -1,19 +1,3 @@
-"""
-database.py
-==================================================
-Creates the SQLite database and tables, and seeds it with:
-  - One Village row for every location in health_data.py (38 total,
-    covering every Indian state and union territory) so the Register
-    page dropdown has a complete list to choose from.
-  - One demo user per role (Admin, Health Officer, ASHA Worker,
-    Community Volunteer) so you can log in immediately and try every
-    part of the app.
-
-This file is safe to re-run -- it drops and recreates tables each time,
-which is intentional for a student/demo project so you always start from
-a clean, working state.
-"""
-
 import sqlite3
 import os
 from datetime import datetime, timedelta
