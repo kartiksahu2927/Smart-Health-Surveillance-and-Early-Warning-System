@@ -73,13 +73,14 @@ python app.py
 - Advanced AI models for improved outbreak prediction.
 - Multi-language support for rural communities.
 
-## 👨‍💻 Author
+## 👨‍💻 Project Team
 
-**Kartik Sahu**
-**Kashish Sharma**
-**Karishma Singh**
-**Navya Sharma**
+**Kartik Sahu**<br>
+**Kashish Sharma**<br>
+**Karishma Singh**<br>
+**Navya Sharma**<br>
 **Samarth Jindal**
+  
 ## 📸 Screenshots
 
 ### 🔐 Login Page
